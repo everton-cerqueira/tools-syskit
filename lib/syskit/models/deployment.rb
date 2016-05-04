@@ -10,14 +10,14 @@ module Syskit
             #
             # @key_name option_name
             # @return [Hash<String,String>]
-            inherited_attribute('default_run_option', 'default_run_options', :map => true) { Hash.new }
+            inherited_attribute('default_run_option', 'default_run_options', map: true) { Hash.new }
 
             # The set of default name mappings for the instances of this
             # deployment model
             #
             # @key_name original_task_name
             # @return [Hash<String,String>]
-            inherited_attribute('default_name_mapping', 'default_name_mappings', :map => true) { Hash.new }
+            inherited_attribute('default_name_mapping', 'default_name_mappings', map: true) { Hash.new }
 
             # [Models::Deployment] Returns the parent model for this class, or
             # nil if it is the root model
@@ -56,8 +56,8 @@ module Syskit
                         self.orogen_model.instance_eval(&block)
                     end
                 end
-                klass.each_orogen_deployed_task_context_model do |deployed_task|
-                    klass.default_name_mappings[deployed_task.name] = deployed_task.name
+                klass.each_deployed_task_name do |name|
+                    klass.default_name_mappings[name] = name
                 end
                 klass
             end
@@ -74,10 +74,9 @@ module Syskit
             #   constant's name is the camelized orogen model name.
             #
             # @return [Models::Deployment] the deployment model
-            def define_from_orogen(orogen_model, options = Hash.new)
-                options = Kernel.validate_options options, :register => false
-                model = new_submodel(:orogen_model => orogen_model)
-                if options[:register] && orogen_model.name
+            def define_from_orogen(orogen_model, register: false)
+                model = new_submodel(orogen_model: orogen_model)
+                if register && orogen_model.name
                     Deployments.const_set(orogen_model.name.camelcase(:upper), model)
                 end
                 model
@@ -88,6 +87,27 @@ module Syskit
             # objects can be instanciated with #task
             def tasks
                 orogen_model.task_activities
+            end
+
+            # Enumerate the names of the tasks deployed by self
+            def each_deployed_task_name
+                return enum_for(__method__) if !block_given?
+                orogen_model.task_activities.each do |task|
+                    yield(task.name)
+                end
+            end
+
+            # Enumerate the tasks that are deployed in self
+            #
+            # @yieldparam [String] name the task name
+            # @yieldparam [Models::TaskContext] model the deployed task model
+            def each_deployed_task_model
+                return enum_for(__method__) if !block_given?
+
+                each_orogen_deployed_task_context_model do |deployed_task|
+                    task_model = Syskit::TaskContext.model_for(deployed_task.task_model)
+                    yield(deployed_task.name, task_model)
+                end
             end
 
             # Enumerates the deployed tasks this deployment contains
