@@ -105,6 +105,8 @@ module Syskit
                 orocos_corba_nameservice = Orocos::CORBA::NameService.new(syskit.remote_name)
                 @name_service = Orocos::Async::NameService.new(orocos_corba_nameservice)
 
+                @replay = nil
+
                 if poll_period
                     poll_syskit_interface(syskit, poll_period)
                 end
@@ -132,6 +134,10 @@ module Syskit
                 @all_job_info = Hash.new
                 syskit.on_reachable do
                     update_log_server_connection(syskit.client.log_server_port)
+                    @replay =
+                        if syskit.client.has_subcommand?('replay')
+                            syskit.client.subcommand('replay')
+                        end
                     action_combo.clear
                     syskit.actions.sort_by(&:name).each do |action|
                         next if action.advanced?
@@ -140,8 +146,12 @@ module Syskit
                     global_actions[:start].visible = false
                     global_actions[:restart].visible = true
                     global_actions[:quit].visible = true
-                    connection_state.update_state 'CONNECTED'
-                    emit connection_state_changed(true)
+                    if replay_mode?
+                        connection_state.update_state 'REPLAY'
+                    else
+                        connection_state.update_state 'LIVE'
+                    end
+                    emit connection_state_changed(connection_state.current_state.to_s)
                 end
                 syskit.on_unreachable do
                     if remote_name == 'localhost'
@@ -150,7 +160,7 @@ module Syskit
                     global_actions[:restart].visible = false
                     global_actions[:quit].visible = false
                     connection_state.update_state 'UNREACHABLE'
-                    emit connection_state_changed(false)
+                    emit connection_state_changed(connection_state.current_state.to_s)
                 end
                 syskit.on_job do |job|
                     job.start
@@ -187,7 +197,19 @@ module Syskit
             end
 
             signals 'progress(QString)'
-            signals 'connection_state_changed(bool)'
+            signals 'connection_state_changed(QString)'
+
+            # Whether we are working in live or replay modes
+            def replay_mode?
+                !!@replay
+            end
+
+            # The replay subcommand that gives access to replay control
+            # 
+            # @return [Roby::Interface::ClientSubcommand]
+            def replay
+                @replay
+            end
 
             def remote_name
                 syskit.remote_name
@@ -263,11 +285,19 @@ module Syskit
                 job_summary_layout.add_widget(@job_status_list = WidgetList.new(self))
 
                 @connection_state = GlobalStateLabel.new(name: remote_name)
-                connection_state.declare_state 'CONNECTED', :green
+                connection_state.declare_state 'LIVE', :green
+                connection_state.declare_state 'REPLAY', :green
                 connection_state.declare_state 'UNREACHABLE', :red
                 connect self, SIGNAL('progress(QString)') do |message|
                     state = connection_state.current_state.to_s
-                    connection_state.update_text("%s - %s" % [state, message])
+                    full_message = "%s - %s" % [state, message]
+                    if !syskit_log_stream || syskit_log_stream.init_done?
+                        if replay_mode? && (logical_time = replay.time)
+                            logical_time_s = "#{logical_time.strftime('%H:%M:%S')}.#{'%.03i' % [logical_time.tv_usec / 1000]}"
+                            full_message = "%s<br>&nbsp;&nbsp;RT: %s<br>&nbsp;&nbsp;LG: %s" % [state, message, logical_time_s]
+                        end
+                    end
+                    connection_state.update_text(full_message)
                 end
                 job_status_list.add_widget connection_state
                 connection_state.connect(SIGNAL('clicked()')) do

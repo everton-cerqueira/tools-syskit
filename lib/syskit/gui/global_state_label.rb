@@ -14,7 +14,8 @@ module Syskit
                 super(extra_style: 'margin-left: 2px; margin-top: 2px; font-size: 10pt;',
                       **options)
                 @actions = actions
-                declare_state 'CONNECTED', :green
+                declare_state 'LIVE', :green
+                declare_state 'REPLAY', :green
                 declare_state 'UNREACHABLE', :red
             end
 
