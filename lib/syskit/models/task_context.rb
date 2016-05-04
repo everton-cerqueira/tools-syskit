@@ -180,7 +180,7 @@ module Syskit
             def setup_submodel(submodel, options = Hash.new)
                 orogen_model, options = Kernel.filter_options options, :orogen_model
                 if !(m = orogen_model[:orogen_model])
-                    m = self.orogen_model.class.new(Roby.app.default_orogen_project, nil)
+                    m = self.orogen_model.class.new(Roby.app.default_orogen_project, options[:orogen_model_name])
                     m.subclasses self.orogen_model
                 end
                 submodel.orogen_model = m
