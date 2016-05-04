@@ -425,14 +425,8 @@ module Syskit
             # Stop the process server started by start_local_process_server if
             # one is running
             def self.stop_local_process_server
-                return if !has_local_process_server?
-
-                ::Process.kill('INT', @server_pid)
-                begin
-                    ::Process.waitpid(@server_pid)
-                    @server_pid = nil
-                rescue Errno::ESRCH
-                end
+                Syskit.conf.process_server_for('localhost').quit_server
+                ::Process.waitpid(@server_pid)
             end
 
             ##
@@ -557,7 +551,12 @@ module Syskit
                 end
 
                 disconnect_all_process_servers
-                stop_local_process_server
+                if has_local_process_server?
+                    if !Syskit.conf.has_process_server?('localhost')
+                        connect_to_local_process_server(app)
+                    end
+                    stop_local_process_server
+                end
             end
 
             # Disconnects from all process servers
