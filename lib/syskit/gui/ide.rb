@@ -79,8 +79,8 @@ module Syskit
                 connect(runtime_state, SIGNAL('fileOpenClicked(const QUrl&)'),
                         self, SLOT('fileOpenClicked(const QUrl&)'))
                 @connection_state = GlobalStateLabel.new(
-                    actions: runtime_state.global_actions.values,
-                    name: runtime_state.remote_name)
+                    actions: runtime_state.app_control.actions.values,
+                    name: runtime_state.app_control.remote_name)
 
                 tab_widget.set_corner_widget(connection_state, Qt::TopLeftCorner)
                 connect runtime_state, SIGNAL('connection_state_changed(QString)') do |new_state|

@@ -1,6 +1,7 @@
 require 'syskit'
 require 'roby/interface/async'
 require 'roby/interface/async/log'
+require 'syskit/gui/app_control'
 require 'syskit/gui/job_status_display'
 require 'syskit/gui/widget_list'
 require 'syskit/gui/expanded_job_status'
@@ -11,11 +12,16 @@ module Syskit
     module GUI
         # UI that displays and allows to control jobs
         class RuntimeState < Qt::Widget
-            # @return [Roby::Interface::Async::Interface] the underlying syskit
-            #   interface
-            attr_reader :syskit
-            # An async object to access the log stream
-            attr_reader :syskit_log_stream
+            # The AppControl object that maintains and displays the connection to the app
+            attr_reader :app_control
+            # The syskit connection object
+            def syskit
+                app_control.syskit
+            end
+            # The syskit log stream
+            def syskit_log_stream
+                app_control.syskit_log_stream
+            end
 
             # The toplevel layout
             attr_reader :main_layout
@@ -31,9 +37,6 @@ module Syskit
             attr_reader :action_combo
             # The job that is currently selected
             attr_reader :current_job
-            # The connection state, which gives access to the global Syskit
-            # state
-            attr_reader :connection_state
 
             # All known tasks
             attr_reader :all_tasks
@@ -47,12 +50,6 @@ module Syskit
             # The list of task names of the task currently displayed by the task
             # inspector
             attr_reader :current_orocos_tasks
-
-            # Returns a list of actions that can be performed on the Roby
-            # instance
-            #
-            # @return [Array<Qt::Action>]
-            attr_reader :global_actions
 
             class ActionListDelegate < Qt::StyledItemDelegate
                 OUTER_MARGIN = 5
@@ -111,132 +108,43 @@ module Syskit
                     poll_syskit_interface(syskit, poll_period)
                 end
 
-                @syskit = syskit
+                @app_control = AppControl.new(syskit, self)
                 create_ui
-
-                @global_actions = Hash.new
-                action = global_actions[:start]   = Qt::Action.new("Start", self)
-                connect action, SIGNAL('triggered()') do
-                    app_start
-                end
-                action = global_actions[:restart] = Qt::Action.new("Restart", self)
-                connect action, SIGNAL('triggered()') do
-                    app_restart
-                end
-                action = global_actions[:quit]    = Qt::Action.new("Quit", self)
-                connect action, SIGNAL('triggered()') do
-                    app_quit
-                end
 
                 @current_job = nil
                 @current_orocos_tasks = Set.new
                 @all_tasks = Set.new
                 @all_job_info = Hash.new
-                syskit.on_reachable do
-                    update_log_server_connection(syskit.client.log_server_port)
-                    @replay =
-                        if syskit.client.has_subcommand?('replay')
-                            syskit.client.subcommand('replay')
-                        end
+
+                connect app_control, SIGNAL('progress(QString)'),
+                    self, SIGNAL('progress(QString)')
+                connect app_control, SIGNAL('connection_state_changed(QString)'),
+                    self, SIGNAL('connection_state_changed(QString)')
+                app_control.on_reachable do
                     action_combo.clear
                     syskit.actions.sort_by(&:name).each do |action|
                         next if action.advanced?
                         action_combo.add_item(action.name, Qt::Variant.new(action.doc))
                     end
-                    global_actions[:start].visible = false
-                    global_actions[:restart].visible = true
-                    global_actions[:quit].visible = true
-                    if replay_mode?
-                        connection_state.update_state 'REPLAY'
-                    else
-                        connection_state.update_state 'LIVE'
-                    end
-                    emit connection_state_changed(connection_state.current_state.to_s)
                 end
-                syskit.on_unreachable do
-                    if remote_name == 'localhost'
-                        global_actions[:start].visible = true
-                    end
-                    global_actions[:restart].visible = false
-                    global_actions[:quit].visible = false
-                    connection_state.update_state 'UNREACHABLE'
-                    emit connection_state_changed(connection_state.current_state.to_s)
+                app_control.on_log_reachable do
+                    deselect_job
                 end
-                syskit.on_job do |job|
+                app_control.on_log_update do |cycle_index, cycle_time|
+                    job_expanded_status.update_time(cycle_index, cycle_time)
+                    update_tasks_info
+                    job_expanded_status.add_tasks_info(all_tasks, all_job_info)
+                    job_expanded_status.scheduler_state = syskit_log_stream.scheduler_state
+                    job_expanded_status.update_chronicle
+                end
+                app_control.on_job do |job|
                     job.start
                     monitor_job(job)
                 end
             end
 
-            def update_log_server_connection(port)
-                if syskit_log_stream && (syskit_log_stream.port == port)
-                    return
-                elsif syskit_log_stream
-                    syskit_log_stream.close
-                end
-                @syskit_log_stream = Roby::Interface::Async::Log.new(syskit.remote_name, port: port)
-                syskit_log_stream.on_reachable do
-                    deselect_job
-                end
-                syskit_log_stream.on_init_progress do |rx, expected|
-                    emit progress("loading %02i" % [Float(rx) / expected * 100])
-                end
-                syskit_log_stream.on_update do |cycle_index, cycle_time|
-                    if syskit_log_stream.init_done?
-                        time_s = "#{cycle_time.strftime('%H:%M:%S')}.#{'%.03i' % [cycle_time.tv_usec / 1000]}"
-                        emit progress("@%i %s" % [cycle_index, time_s])
-
-                        job_expanded_status.update_time(cycle_index, cycle_time)
-                        update_tasks_info
-                        job_expanded_status.add_tasks_info(all_tasks, all_job_info)
-                        job_expanded_status.scheduler_state = syskit_log_stream.scheduler_state
-                        job_expanded_status.update_chronicle
-                    end
-                    syskit_log_stream.clear_integrated
-                end
-            end
-
             signals 'progress(QString)'
             signals 'connection_state_changed(QString)'
-
-            # Whether we are working in live or replay modes
-            def replay_mode?
-                !!@replay
-            end
-
-            # The replay subcommand that gives access to replay control
-            # 
-            # @return [Roby::Interface::ClientSubcommand]
-            def replay
-                @replay
-            end
-
-            def remote_name
-                syskit.remote_name
-            end
-
-            def app_start
-                robot_name, start_controller = AppStartDialog.exec(Roby.app.robots.names, self)
-                if robot_name
-                    extra_args = Array.new
-                    if !robot_name.empty?
-                        extra_args << "-r#{robot_name}"
-                    end
-                    if start_controller
-                        extra_args << "-c"
-                    end
-                    Kernel.spawn Gem.ruby, '-S', 'syskit', 'run', *extra_args,
-                        pgroup: true
-                end
-            end
-
-            def app_quit
-                syskit.quit
-            end
-
-            def app_restart
-                syskit.restart
-            end
 
             def update_tasks_info
                 if current_job
@@ -284,23 +192,8 @@ module Syskit
                 job_summary_layout.add_layout(@new_job_layout  = create_ui_new_job)
                 job_summary_layout.add_widget(@job_status_list = WidgetList.new(self))
 
-                @connection_state = GlobalStateLabel.new(name: remote_name)
-                connection_state.declare_state 'LIVE', :green
-                connection_state.declare_state 'REPLAY', :green
-                connection_state.declare_state 'UNREACHABLE', :red
-                connect self, SIGNAL('progress(QString)') do |message|
-                    state = connection_state.current_state.to_s
-                    full_message = "%s - %s" % [state, message]
-                    if !syskit_log_stream || syskit_log_stream.init_done?
-                        if replay_mode? && (logical_time = replay.time)
-                            logical_time_s = "#{logical_time.strftime('%H:%M:%S')}.#{'%.03i' % [logical_time.tv_usec / 1000]}"
-                            full_message = "%s<br>&nbsp;&nbsp;RT: %s<br>&nbsp;&nbsp;LG: %s" % [state, message, logical_time_s]
-                        end
-                    end
-                    connection_state.update_text(full_message)
-                end
-                job_status_list.add_widget connection_state
-                connection_state.connect(SIGNAL('clicked()')) do
+                job_status_list.add_widget app_control
+                app_control.connect(SIGNAL('clicked()')) do
                     deselect_job
                 end
 
