@@ -38,7 +38,7 @@ module Syskit
                         end
                     end
                     data_monitoring_table.new(
-                        task, table_arguments,
+                        task, **table_arguments,
                         on_replace: :copy,
                         parent: coordination_context)
                     super

@@ -430,10 +430,8 @@ end
 describe ComBus do
     include Test_DataServiceModel
 
-    def new_submodel(options = Hash.new, &block)
-        options = Kernel.validate_options options,
-            name: nil, message_type: '/int'
-        ComBus.new_submodel(options, &block)
+    def new_submodel(name: nil, message_type: '/int', &block)
+        ComBus.new_submodel(name: name, message_type: message_type, &block)
     end
 
     before do

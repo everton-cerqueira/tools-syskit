@@ -155,7 +155,7 @@ module Syskit
             def add_child(name, child_models, dependency_options)
                 name = name.to_str
                 dependency_options = Roby::TaskStructure::Dependency.
-                    validate_options(dependency_options)
+                    validate_options(**dependency_options)
 
                 # We do NOT check for an already existing definition. The reason
                 # is that specialization (among other) will add a default child,
@@ -616,18 +616,12 @@ module Syskit
             #
             # Explicit connections always have precedence on automatic
             # connections. See #autoconnect for automatic connection handling
-            def connect(mappings)
-                options = Hash.new
-                mappings.delete_if do |a, b|
-                    if a.respond_to?(:to_str)
-                        options[a] = b
-                    end
-                end
+            def connect(mappings, **options)
                 if !options.empty?
                     options = Kernel.validate_options options, Orocos::Port::CONNECTION_POLICY_OPTIONS
                 end
                 mappings.each do |out_p, in_p|
-                    out_p.connect_to in_p
+                    out_p.connect_to in_p, **options
                 end
             end
 
@@ -884,13 +878,13 @@ module Syskit
                 end
 
                 dependency_options = Roby::TaskStructure::Dependency.
-                    validate_options(child_m.dependency_options)
+                    validate_options(**child_m.dependency_options)
                 default_options = Roby::TaskStructure::Dependency.
-                    validate_options(:model => [dependent_models, dependent_arguments], :roles => [child_name].to_set)
+                    validate_options(model: [dependent_models, dependent_arguments], roles: [child_name].to_set)
                 dependency_options = Roby::TaskStructure::Dependency.merge_dependency_options(
                     dependency_options, default_options)
                 if !dependency_options[:success]
-                    dependency_options = { :success => [], :failure => [:stop] }.
+                    dependency_options = { success: [], failure: [:stop] }.
                         merge(dependency_options)
                 end
                 dependency_options

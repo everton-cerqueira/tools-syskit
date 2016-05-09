@@ -81,9 +81,7 @@ module Syskit
             # Creates a subclass of TaskContext that represents the given task
             # specification. The class is registered as
             # Roby::Orogen::ProjectName::ClassName.
-            def define_from_orogen(orogen_model, options = Hash.new)
-                options = Kernel.validate_options options,
-                    :register => false
+            def define_from_orogen(orogen_model, register: false)
                 if model = find_model_by_orogen(orogen_model) # already defined, probably because of dependencies
                     return model
                 end
@@ -93,11 +91,11 @@ module Syskit
                     supermodel = self
                 else
                     supermodel = find_model_by_orogen(superclass) ||
-                        define_from_orogen(superclass, :register => options[:register])
+                        define_from_orogen(superclass, register: register)
                 end
-                klass = supermodel.new_submodel(:orogen_model => orogen_model)
+                klass = supermodel.new_submodel(orogen_model: orogen_model)
 
-                if options[:register] && orogen_model.name
+                if register && orogen_model.name
                     register_syskit_model_from_orogen_name(klass)
                 end
 

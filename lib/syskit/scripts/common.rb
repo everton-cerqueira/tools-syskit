@@ -160,16 +160,15 @@ require 'syskit/roby_app'
                 end
             end
 
-            def self.generate_output(display_options = Hash.new)
-                default_exclude = []
+            def self.default_excludes
                 if defined? OroGen::Logger::Logger
-                    default_exclude << OroGen::Logger::Logger
+                    Set[OroGen::Logger::Logger]
+                else
+                    Set.new
                 end
-                display_options = Kernel.validate_options display_options,
-                    :remove_compositions => false,
-                    :excluded_models => default_exclude.to_set,
-                    :annotations => Set.new
+            end
 
+            def self.generate_output(remove_compositions: false, excluded_models: default_excludes, annotations: Set.new)
                 # Now output them
                 case output_type
                 when "txt"

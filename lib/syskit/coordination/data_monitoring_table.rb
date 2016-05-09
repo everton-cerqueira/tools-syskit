@@ -52,10 +52,9 @@ module Syskit
             attr_reader :monitors
 
             # (see Roby::Coordination::Base)
-            def initialize(root_task, arguments = Hash.new, options = Hash.new)
-                super(root_task, arguments, options)
-                options, _ = Kernel.filter_options options, :on_replace => :drop
-                @poll_id = root_task.poll(options) do
+            def initialize(root_task, on_replace: :drop, **arguments)
+                super(root_task, on_replace: on_replace, **arguments)
+                @poll_id = root_task.poll(on_replace: on_replace) do
                     poll
                 end
                 @monitors = Array.new

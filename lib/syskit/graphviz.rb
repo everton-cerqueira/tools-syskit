@@ -247,24 +247,15 @@ module Syskit
 
             # Generates a dot graph that represents the task hierarchy in this
             # deployment
-            def relation_to_dot(options = Hash.new)
-                options = Kernel.validate_options options,
-                    :accessor => nil,
-                    :dot_edge_mark => "->",
-                    :dot_graph_type => 'digraph',
-                    :highlights => [],
-                    :toned_down => [],
-                    :displayed_options => [],
-                    :annotations => ['task_info']
-
-                if !options[:accessor]
+            def relation_to_dot(accessor: nil, dot_edge_mark: '->', dot_graph_type: 'digraph', highlights: [], toned_down: [], displayed_options: [], annotations: ['task_info'])
+                if !accessor
                     raise ArgumentError, "no :accessor option given"
                 end
 
                 port_annotations.clear
                 task_annotations.clear
 
-                options[:annotations].each do |ann_name|
+                annotations.each do |ann_name|
                     send("add_#{ann_name}_annotations")
                 end
 
@@ -274,13 +265,13 @@ module Syskit
 
                 plan.find_local_tasks(Component).each do |task|
                     all_tasks << task
-                    task.send(options[:accessor]) do |child_task, edge_info|
+                    task.send(accessor) do |child_task, edge_info|
                         label = []
-                        options[:displayed_options].each do |key|
+                        displayed_options.each do |key|
                             label << "#{key}=#{format_edge_info(edge_info[key])}"
                         end
                         all_tasks << child_task
-                        result << "  #{task.dot_id} #{options[:dot_edge_mark]} #{child_task.dot_id} [label=\"#{label.join("\\n")}\"];"
+                        result << "  #{task.dot_id} #{dot_edge_mark} #{child_task.dot_id} [label=\"#{label.join("\\n")}\"];"
                     end
                 end
 
@@ -293,7 +284,7 @@ module Syskit
                         attributes << "href=\"plan://syskit/#{task.dot_id}\""
                     end
                     color_set =
-                        if options[:toned_down].include?(task)
+                        if toned_down.include?(task)
                             COLORS[:toned_down]
                         else COLORS[:normal]
                         end
@@ -302,7 +293,7 @@ module Syskit
                         else color_set[0]
                         end
                     attributes << "color=\"#{color}\""
-                    if options[:highlights].include?(task)
+                    if highlights.include?(task)
                         attributes << "penwidth=3"
                     end
 
@@ -312,9 +303,9 @@ module Syskit
                 if result.empty?
                     # This workarounds a dot bug in which some degenerate graphs
                     # (only one node) crash it
-                    return "#{options[:dot_graph_type]} { }"
+                    return "#{dot_graph_type} { }"
                 else
-                    ["#{options[:dot_graph_type]} {",
+                    ["#{dot_graph_type} {",
                      "  mindist=0",
                      "  rankdir=TB",
                      "  node [shape=record,height=.1,fontname=\"Arial\"];"].
@@ -647,10 +638,7 @@ module Syskit
                 result << "    }"
                 result.join("\n")
             end
-            def format_annotations(annotations, key = nil, options = Hash.new)
-                options = Kernel.validate_options options,
-                    :include_empty => false
-
+            def format_annotations(annotations, key = nil, include_empty: false)
                 if key
                     if !annotations.has_key?(key)
                         return
@@ -664,7 +652,7 @@ module Syskit
                 result = ann.map do |category, values|
                     # Values are allowed to be an array of strings or plain strings, normalize to array
                     values = [*values]
-                    next if (values.empty? && !options[:include_empty])
+                    next if (values.empty? && !include_empty)
 
                     values = values.map { |v| v.tr("<>", "[]") }
                     values = values.map { |v| v.tr("{}", "[]") }

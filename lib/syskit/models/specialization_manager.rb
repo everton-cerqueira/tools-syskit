@@ -600,11 +600,7 @@ module Syskit
             # @return [Model<Composition>] the specialized model, or
             #   {#composition_model} if no specializations match
             # @raise [AmbiguousSpecialization] if multiple models match
-            def matching_specialized_model(selection, options = Hash.new)
-                options = Kernel.validate_options options,
-                    :strict => true,
-                    :specialization_hints => Set.new
-
+            def matching_specialized_model(selection, strict: true, specialization_hints: Set.new)
                 component_selection = selection.map_value do |_, selected|
                     selected.selected.model.to_component_model
                 end
@@ -612,7 +608,7 @@ module Syskit
 
                 if candidates.size > 1
                     filtered_candidates = candidates.find_all do |spec, _|
-                        options[:specialization_hints].any? do |hint|
+                        specialization_hints.any? do |hint|
                             spec.weak_match?(hint)
                         end
                     end
@@ -632,7 +628,7 @@ module Syskit
                 if candidates.empty?
                     return composition_model
                 elsif candidates.size > 1
-                    if options[:strict]
+                    if strict
                         selection = selection.map_value do |_, sel|
                             sel.selected
                         end

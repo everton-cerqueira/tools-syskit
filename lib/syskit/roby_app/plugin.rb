@@ -150,15 +150,21 @@ module Syskit
             end
 
             def self.setup_loaders(app)
-                all_files =
-                    app.find_files_in_dirs("models", "ROBOT", "pack", "orogen", :all => app.auto_load_all?, :order => :specific_first, :pattern => /\.orogen$/)
+                all_files = app.find_files_in_dirs(
+                    "models", "ROBOT", "pack", "orogen",
+                    all: app.auto_load_all?,
+                    order: :specific_first,
+                    pattern: /\.orogen$/)
                 all_files.reverse.each do |path|
                     name = File.basename(path, ".orogen")
                     app.orogen_pack_loader.register_orogen_file path, name
                 end
 
-                all_files =
-                    app.find_files_in_dirs("models", "ROBOT", "pack", "orogen", :all => app.auto_load_all?, :order => :specific_first, :pattern => /\.typelist$/)
+                all_files = app.find_files_in_dirs(
+                    "models", "ROBOT", "pack", "orogen",
+                    all: app.auto_load_all?,
+                    order: :specific_first,
+                    pattern: /\.typelist$/)
                 all_files.reverse.each do |path|
                     name = File.basename(path, ".typelist")
                     dir  = File.dirname(path)
@@ -166,9 +172,9 @@ module Syskit
                 end
 
                 app.ros_loader.search_path.
-                    concat(Roby.app.find_dirs('models', 'ROBOT', 'orogen', 'ros', :all => app.auto_load_all?, :order => :specific_first))
+                    concat(Roby.app.find_dirs('models', 'ROBOT', 'orogen', 'ros', all: app.auto_load_all?, order: :specific_first))
                 app.ros_loader.packs.
-                    concat(Roby.app.find_dirs('models', 'ROBOT', 'pack', 'ros', :all => true, :order => :specific_last))
+                    concat(Roby.app.find_dirs('models', 'ROBOT', 'pack', 'ros', all: true, order: :specific_last))
             end
 
             # Called by the main Roby application on setup. This is the first
@@ -226,7 +232,7 @@ module Syskit
                         Orocos.initialize
                         if Orocos::ROS.enabled?
                             Orocos::ROS.initialize
-                            Orocos::ROS.roscore_start(:wait => true)
+                            Orocos::ROS.roscore_start(wait: true)
                         end
                     end
                 end
@@ -236,14 +242,14 @@ module Syskit
                     !(app.single? && app.simulation?)
 
                 if start_local_process_server
-                    start_local_process_server(:redirect => Syskit.conf.redirect_local_process_server?)
+                    start_local_process_server(redirect: Syskit.conf.redirect_local_process_server?)
                 else
                     fake_client = Configuration::ModelOnlyServer.new(app.default_loader)
                     Syskit.conf.register_process_server('localhost', fake_client, app.log_dir)
                 end
 
                 rtt_core_model = app.default_loader.task_model_from_name("RTT::TaskContext")
-                Syskit::TaskContext.define_from_orogen(rtt_core_model, :register => true)
+                Syskit::TaskContext.define_from_orogen(rtt_core_model, register: true)
 
                 if !app.additional_model_files.empty?
                     toplevel_object.extend SingleFileDSL
@@ -314,15 +320,13 @@ module Syskit
             # and deployments they contain.
             #
             # @return [OroGen::Spec::Project]
-            def using_task_library(name, options = Hash.new)
-                options = Kernel.validate_options options, :loader => default_loader
-                options[:loader].project_model_from_name(name)
+            def using_task_library(name, loader: default_loader)
+                loader.project_model_from_name(name)
             end
 
             # Loads the required ROS package
-            def using_ros_package(name, options = Hash.new)
-                options = Kernel.validate_options options, :loader => ros_loader
-                using_task_library(name, options)
+            def using_ros_package(name, loader: ros_loader)
+                using_task_library(name, loader: loader)
             end
 
             # @deprecated use {using_task_library} instead
@@ -395,16 +399,14 @@ module Syskit
 
             # Loads the oroGen deployment model for the given name and returns
             # the corresponding syskit model
-            def using_deployment(name, options = Hash.new)
-                options = Kernel.validate_options options, :loader => default_loader
-                deployer = options[:loader].deployment_model_from_name(name)
+            def using_deployment(name, loader: default_loader)
+                deployer = loader.deployment_model_from_name(name)
                 deployment_define_from_orogen(deployer)
             end
 
             # Loads the oroGen deployment model based on a ROS launcher file
-            def using_ros_launcher(name, options = Hash.new)
-                options = Kernel.validate_options options, :loader => ros_loader
-                using_deployment(name, options)
+            def using_ros_launcher(name, loader: ros_loader)
+                using_deployment(name, loader: loader)
             end
 
             # Loads the oroGen deployment model for the given name and returns
@@ -418,7 +420,7 @@ module Syskit
                 if Deployment.has_model_for?(deployer)
                     Deployment.find_model_by_orogen(deployer)
                 else
-                    Deployment.define_from_orogen(deployer, :register => true)
+                    Deployment.define_from_orogen(deployer, register: true)
                 end
             end
 

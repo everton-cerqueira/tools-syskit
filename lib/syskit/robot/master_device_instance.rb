@@ -265,8 +265,7 @@ module Syskit
             #     created
             #   @return [Syskit::Robot::SlaveDeviceInstance]
             #   
-            def slave(slave_service, options = Hash.new)
-                options = Kernel.validate_options options, :as => nil
+            def slave(slave_service, as: nil)
                 if existing_slave = slaves[slave_service]
                     return existing_slave
                 end
@@ -278,9 +277,9 @@ module Syskit
                 slave_name = "#{driver_model.full_name}.#{slave_service}"
                 srv = task_model.find_data_service(slave_name)
                 if !srv
-                    if options[:as]
+                    if as
                         new_task_model = task_model.ensure_model_is_specialized
-                        srv = new_task_model.require_dynamic_service(slave_service, :as => options[:as])
+                        srv = new_task_model.require_dynamic_service(slave_service, as: as)
                     end
                     if !srv
                         raise ArgumentError, "there is no service #{slave_name} and no dynamic service in #{task_model.short_name}"
