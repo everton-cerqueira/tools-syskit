@@ -422,6 +422,7 @@ module Syskit
                     profile = Profile.new("#{self.name}::#{name}")
                     const_set(name, profile)
                     Profile.profiles << profile
+                    profile.doc MetaRuby::DSLs.parse_documentation_block(/.*/, "profile")
                 end
                 profile.instance_eval(&block)
             end
