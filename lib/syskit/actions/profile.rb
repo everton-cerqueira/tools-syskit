@@ -9,17 +9,27 @@ module Syskit
             end
             @profiles = Array.new
 
-            class Definition < InstanceRequirements
+            dsl_attribute :doc
+
+            class ProfileInstanceRequirements < InstanceRequirements
                 attr_accessor :profile
                 attr_predicate :advanced?, true
-                def initialize(profile, name)
+                def initialize(profile, name, advanced: false)
                     super()
                     self.profile = profile
-                    self.advanced = false
+                    self.advanced = advanced
                     self.name = name
                 end
 
-                def to_action_model(profile = self.profile)
+                def to_action_model(profile = self.profile, doc = self.doc)
+                    action_model = super(profile, doc)
+                    action_model.advanced = advanced?
+                    action_model
+                end
+            end
+
+            class Definition < ProfileInstanceRequirements
+                def to_action_model(profile = self.profile, doc = self.doc)
                     action_model = profile.resolved_definition(name).
                         to_action_model(profile, doc || "defined in #{profile}")
                     action_model.advanced = advanced?
@@ -259,12 +269,14 @@ module Syskit
             # @raise [ArgumentError] if the definition does not exist
             # @see definition
             def resolved_definition(name)
-                req = definition(name)
+                req = definitions[name]
+                if !req
+                    raise ArgumentError, "profile #{self.name} has no definition called #{name}"
+                end
 
-                result = InstanceRequirements.new
+                result = ProfileInstanceRequirements.new(self, name, advanced: req.advanced?)
                 result.merge(req)
                 inject_di_context(result)
-                result.name = req.name
                 result.doc(req.doc)
                 result
             end
